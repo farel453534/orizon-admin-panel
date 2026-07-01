@@ -93,11 +93,6 @@ class NexusBot(discord.Client):
         logger.info(f"Logged in as {self.user} (ID: {self.user.id})")
         await log_to_db('info', f'Bot logged in as {self.user}')
 
-        await self.change_presence(
-            status=discord.Status.online,
-            activity=discord.Game(name="MssClick Admin")
-        )
-
         try:
             self.add_view(AdminTicketPanelView())
             self.add_dynamic_items(ClaimAdminTicketButton, CloseAdminTicketButton)
