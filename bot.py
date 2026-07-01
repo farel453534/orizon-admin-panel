@@ -146,12 +146,15 @@ def make_short_name(member):
     return name[:10] or str(member.id)[-4:]
 
 
-ROLE_ADMIN = 1500214818936848534
-ROLE_GERANCE = 1500213826107343039
-ROLE_DIRECTION = 1500215064177934507
+ROLE_GERANT_RP = 1521523237383835718
+ROLE_GERANT_STAFF = 1521523168659898573
+ROLE_ADMINISTRATEUR = 1521523276315099309
+ROLE_FULL_ACCESS_1 = 1521498188148768809
+ROLE_FULL_ACCESS_2 = 1521523197764305130
 
-ADMIN_CATEGORY_ID = 1500242373614112958
+ADMIN_CATEGORY_ID = 1521698472976453795
 
+TICKET_LOG_CHANNEL_ID = 1521716387695820881
 TICKET_LOG_CHANNEL = "logs・tickets-admin"
 TICKET_LOG_CATEGORY = "Logs - TicketsAdmin"
 
@@ -168,11 +171,11 @@ ADMIN_TICKET_TYPES = {
 
 ADMIN_TICKET_ORDER = ["trahison", "desertion", "naissance", "coup_etat", "vol", "rpk_joueur", "void"]
 
-ADMIN_TICKET_VIEW_ROLES_DEFAULT = [ROLE_DIRECTION, ROLE_GERANCE]
-ADMIN_TICKET_VIEW_ROLES_VOID = [ROLE_DIRECTION, ROLE_GERANCE, ROLE_ADMIN]
+ADMIN_TICKET_VIEW_ROLES_DEFAULT = [ROLE_GERANT_RP, ROLE_GERANT_STAFF, ROLE_FULL_ACCESS_1, ROLE_FULL_ACCESS_2]
+ADMIN_TICKET_VIEW_ROLES_VOID = [ROLE_GERANT_RP, ROLE_GERANT_STAFF, ROLE_FULL_ACCESS_1, ROLE_FULL_ACCESS_2, ROLE_ADMINISTRATEUR]
 
-ADMIN_TICKET_PING_ROLES_DEFAULT = [ROLE_GERANCE]
-ADMIN_TICKET_PING_ROLES_VOID = [ROLE_GERANCE, ROLE_ADMIN]
+ADMIN_TICKET_PING_ROLES_DEFAULT = [ROLE_GERANT_RP, ROLE_GERANT_STAFF]
+ADMIN_TICKET_PING_ROLES_VOID = [ROLE_GERANT_RP, ROLE_GERANT_STAFF, ROLE_ADMINISTRATEUR]
 
 
 def get_admin_ticket_view_roles(ticket_type_key: str):
@@ -189,6 +192,9 @@ def get_admin_ticket_ping_roles(ticket_type_key: str):
 
 async def get_ticket_log_channel(guild):
     try:
+        ch = guild.get_channel(TICKET_LOG_CHANNEL_ID)
+        if ch:
+            return ch
         cat = discord.utils.get(guild.categories, name=TICKET_LOG_CATEGORY)
         if cat:
             ch = discord.utils.get(cat.text_channels, name=TICKET_LOG_CHANNEL)
@@ -721,7 +727,7 @@ async def logs_command(interaction: discord.Interaction):
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
             guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, embed_links=True),
         }
-        for role_id in (ROLE_DIRECTION, ROLE_GERANCE, ROLE_ADMIN):
+        for role_id in (ROLE_GERANT_RP, ROLE_GERANT_STAFF, ROLE_ADMINISTRATEUR, ROLE_FULL_ACCESS_1, ROLE_FULL_ACCESS_2):
             role = guild.get_role(role_id)
             if role:
                 overwrites[role] = discord.PermissionOverwrite(view_channel=True, read_message_history=True, send_messages=False)
