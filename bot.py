@@ -9,6 +9,10 @@ import logging
 import traceback
 import re
 import datetime
+import hashlib
+import hmac
+import json
+from aiohttp import web
 
 try:
     from dotenv import load_dotenv
@@ -152,6 +156,10 @@ ADMIN_CATEGORY_ID = 1521698472976453795
 TICKET_LOG_CHANNEL_ID = 1521716387695820881
 TICKET_LOG_CHANNEL = "logs・tickets-admin"
 TICKET_LOG_CATEGORY = "Logs - TicketsAdmin"
+
+TEBEX_WEBHOOK_SECRET = os.environ.get("TEBEX_WEBHOOK_SECRET", "")
+TEBEX_PURCHASE_CHANNEL_ID = int(os.environ.get("TEBEX_PURCHASE_CHANNEL_ID", "0"))
+WEB_SERVER_PORT = int(os.environ.get("PORT", "5000"))
 
 
 ADMIN_TICKET_TYPES = {
@@ -812,12 +820,149 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
         pass
 
 
+def verify_tebex_signature(raw_body: bytes, signature: str) -> bool:
+    if not TEBEX_WEBHOOK_SECRET or not signature:
+        return False
+    body_hash = hashlib.sha256(raw_body).hexdigest()
+    expected = hmac.new(
+        TEBEX_WEBHOOK_SECRET.encode("utf-8"),
+        body_hash.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    return hmac.compare_digest(expected, signature)
+
+
+def _fmt_tebex_price(price) -> str:
+    if not isinstance(price, dict):
+        return "N/A"
+    amount = price.get("amount")
+    currency = price.get("currency", "")
+    if amount is None:
+        return "N/A"
+    return f"{amount} {currency}".strip()
+
+
+def _tebex_player_name(subject: dict) -> str:
+    customer = subject.get("customer") or {}
+    username = customer.get("username") or {}
+    if isinstance(username, dict) and username.get("username"):
+        return str(username.get("username"))
+    if customer.get("first_name"):
+        return str(customer.get("first_name"))
+    if customer.get("email"):
+        return str(customer.get("email"))
+    return "Inconnu"
+
+
+def build_tebex_purchase_embed(subject: dict) -> discord.Embed:
+    player = _tebex_player_name(subject)
+    products = subject.get("products") or []
+    if products:
+        prod_lines = "\n".join(
+            f"• {p.get('name', '?')} ×{p.get('quantity', 1)}" for p in products
+        )
+    else:
+        prod_lines = "Aucun produit"
+    price = _fmt_tebex_price(subject.get("price_paid") or subject.get("price"))
+    tx = subject.get("transaction_id") or "N/A"
+
+    embed = discord.Embed(
+        title="🛒 Nouvel achat boutique",
+        colour=0x2ecc71,
+        timestamp=datetime.datetime.now(datetime.timezone.utc),
+    )
+    embed.add_field(name="👤 Joueur", value=str(player), inline=True)
+    embed.add_field(name="💰 Montant", value=price, inline=True)
+    embed.add_field(name="📦 Produits", value=prod_lines[:1024], inline=False)
+    embed.add_field(name="🧾 Transaction", value=f"`{tx}`", inline=False)
+    embed.set_footer(text="Orizon • Poudlard | Boutique")
+    return embed
+
+
+def build_tebex_refund_embed(subject: dict, event_type: str) -> discord.Embed:
+    player = _tebex_player_name(subject)
+    price = _fmt_tebex_price(subject.get("price_paid") or subject.get("price"))
+    tx = subject.get("transaction_id") or "N/A"
+    label = "Remboursement" if "refund" in event_type else "Chargeback / Litige"
+
+    embed = discord.Embed(
+        title=f"↩️ {label}",
+        colour=0xe74c3c,
+        timestamp=datetime.datetime.now(datetime.timezone.utc),
+    )
+    embed.add_field(name="👤 Joueur", value=str(player), inline=True)
+    embed.add_field(name="💰 Montant", value=price, inline=True)
+    embed.add_field(name="🧾 Transaction", value=f"`{tx}`", inline=False)
+    embed.set_footer(text="Orizon • Poudlard | Boutique")
+    return embed
+
+
+async def process_tebex_event(payload: dict):
+    event_type = payload.get("type", "")
+    subject = payload.get("subject") or {}
+
+    channel = bot.get_channel(TEBEX_PURCHASE_CHANNEL_ID)
+    if channel is None:
+        logger.warning("Tebex: purchase channel not found (TEBEX_PURCHASE_CHANNEL_ID).")
+        return
+
+    if event_type == "payment.completed":
+        await channel.send(embed=build_tebex_purchase_embed(subject))
+    elif event_type in ("payment.refunded", "payment.chargeback", "payment.dispute.opened"):
+        await channel.send(embed=build_tebex_refund_embed(subject, event_type))
+    else:
+        logger.info(f"Tebex: ignored event type '{event_type}'.")
+
+
+async def handle_tebex_webhook(request: web.Request):
+    raw = await request.read()
+    signature = request.headers.get("X-Signature", "")
+
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except Exception:
+        return web.Response(status=400, text="invalid json")
+
+    event_type = payload.get("type", "")
+
+    if not verify_tebex_signature(raw, signature):
+        logger.warning("Tebex webhook: invalid or missing signature.")
+        return web.Response(status=403, text="invalid signature")
+
+    if event_type == "validation.webhook":
+        return web.json_response({"id": payload.get("id")})
+
+    try:
+        await process_tebex_event(payload)
+    except Exception:
+        logger.error(f"Tebex webhook processing error: {traceback.format_exc()}")
+
+    return web.Response(status=200, text="ok")
+
+
+async def handle_health(request: web.Request):
+    return web.Response(status=200, text="ok")
+
+
+async def start_web_server():
+    app = web.Application()
+    app.router.add_get("/", handle_health)
+    app.router.add_post("/tebex-webhook", handle_tebex_webhook)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", WEB_SERVER_PORT)
+    await site.start()
+    logger.info(f"Web server (Tebex webhooks) listening on port {WEB_SERVER_PORT}.")
+    return runner
+
+
 async def main():
     await init_db()
     token = os.environ.get("DISCORD_TOKEN")
     if not token:
         logger.error("DISCORD_TOKEN is not set.")
         return
+    await start_web_server()
     logger.info("Starting bot...")
     async with bot:
         await bot.start(token)
