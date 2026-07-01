@@ -298,32 +298,34 @@ class AdminTicketPanelView(discord.ui.View):
 class TicketAdminLayout(discord.ui.LayoutView):
     def __init__(self):
         super().__init__(timeout=None)
-        container = discord.ui.Container(accent_colour=0xE00000)
-
-        try:
-            gallery = discord.ui.MediaGallery()
-            gallery.add_item(media="https://i.imgur.com/HaVxSDm.png")
-            container.add_item(gallery)
-        except Exception:
-            pass
+        container = discord.ui.Container(accent_colour=0x2b2d31)
 
         container.add_item(discord.ui.TextDisplay(
-            "## 🔧  OUVRIR UN TICKET VIA LE BOT ADMIN"
+            "## 🎫  Ouvrir un ticket auprès de l'Administration"
         ))
         container.add_item(discord.ui.Separator())
         container.add_item(discord.ui.TextDisplay(
-            "### COMMENT ÇA MARCHE ?\n"
-            "**1** Sélectionnez la **raison** de votre ticket dans le menu.\n"
-            "**2** Le bot créera un ticket pour vous qui attendra d'être prit en charge.\n"
-            "**3** Expliquez votre demande en attendant.\n"
-            "**4** Patientez jusqu'à l'arrivée d'un membre de l'Administration."
+            "### 📌 Comment ça marche ?\n"
+            "1️⃣ Sélectionnez la **raison** de votre demande dans le menu ci-dessous.\n"
+            "2️⃣ Le bot crée un ticket transmis à l'équipe concernée.\n"
+            "3️⃣ Vous recevez un message privé dès qu'un membre du staff le prend en charge."
         ))
         container.add_item(discord.ui.Separator())
         container.add_item(discord.ui.TextDisplay(
-            "### PRÉVENTION\n"
-            "» Les autorisations peuvent prendre du temps à venir, le temps que l'administration étudie votre demande, sa cohérence, votre rp et d'autres paramètres importants."
+            "### 🤝 Règles de courtoisie\n"
+            "• Restez poli et respectueux envers le staff.\n"
+            "• Toute forme de harcèlement ou d'abus est strictement interdite."
         ))
         container.add_item(discord.ui.Separator())
+        container.add_item(discord.ui.TextDisplay(
+            "### ⏳ Information importante\n"
+            "» Pour les entretiens, les coups d'État ou les autorisations RP, merci de faire preuve de patience : les délais de réponse peuvent varier."
+        ))
+        container.add_item(discord.ui.Separator())
+        container.add_item(discord.ui.TextDisplay(
+            "### 🎯 Sélection du ticket\n"
+            "Choisissez une raison dans le menu ci-dessous pour commencer."
+        ))
 
         action_row = discord.ui.ActionRow()
         action_row.add_item(AdminTicketSelect())
@@ -331,7 +333,7 @@ class TicketAdminLayout(discord.ui.LayoutView):
 
         container.add_item(discord.ui.Separator())
         container.add_item(discord.ui.TextDisplay(
-            "-# MssClick • Poudlard | Tickets Admin"
+            "-# Orizon • Poudlard | Autorisation RP"
         ))
 
         self.add_item(container)
